@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket gRPC Demo</title>
+</head>
+<body>
+    <h1>WebSocket gRPC Demo</h1>
+    <div>
+        <input type="text" id="message" placeholder="Enter message">
+        <button onclick="sendMessage()">Send</button>
+    </div>
+    <div id="output"></div>
+
+    <script>
+        const userID = 'user-' + Math.random().toString(36).substr(2, 9);
+        const ws = new WebSocket(`ws://localhost:8080/ws/${userID}`);
+
+        ws.onmessage = function(event) {
+            const msg = JSON.parse(event.data);
+            const output = document.getElementById('output');
+            output.innerHTML += `<p>${msg.timestamp} [${msg.user_id}]: ${msg.content}</p>`;
+        };
+
+        function sendMessage() {
+            const input = document.getElementById('message');
+            ws.send(JSON.stringify({ content: input.value }));
+            input.value = '';
+        }
+    </script>
+</body>
+</html>

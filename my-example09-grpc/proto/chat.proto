@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package chat;
+
+option go_package = "github.com/yourname/gin-websocket-grpc/proto";
+
+service ChatService {
+  rpc SendMessage (MessageRequest) returns (MessageResponse);
+  rpc StreamMessages (StreamRequest) returns (stream MessageResponse);
+}
+
+message MessageRequest {
+  string content = 1;
+  string user_id = 2;
+}
+
+message MessageResponse {
+  string content = 1;
+  string user_id = 2;
+  string timestamp = 3;
+}
+
+message StreamRequest {
+  string user_id = 1;
+}
