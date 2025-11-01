@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	// "strings"
+	"time"
 )
 
 func app() func(string) string {
@@ -14,32 +16,33 @@ func app() func(string) string {
 }
 
 func main() {
+	//閉包1
 	// a:=app()
 	// b:=app()
 	// fmt.Println(a("go"))
 	// fmt.Println(b("ALL"))
 
-	// a := 5
-	// func() {
-	//     fmt.Println("a =", a)
-	// }()
-	// a = 10
-	// time.Sleep(1 * time.Second)
+	a := 5
+	func() {
+	    fmt.Println("a =", a)
+	}()
+	a = 10
+	time.Sleep(1 * time.Second)
 
-	// done := make(chan bool)
+	done := make(chan bool)
 
-	// values := []string{"a", "b", "c"}
-	// for _, v := range values {
-	//     go func() {
-	//         fmt.Println(v)
-	//         done <- true
-	//     }()
-	// }
-	// // wait for all goroutines to complete before exiting
-	// for _ = range values {
-	// 	fmt.Println("?")
-	//     <-done
-	// }
+	values := []string{"a", "b", "c"}
+	for _, v := range values {
+	    go func() {
+	        fmt.Println(v)
+	        done <- true
+	    }()
+	}
+	// wait for all goroutines to complete before exiting
+	for _ = range values {
+		fmt.Println("?")
+	    <-done
+	}
 
 	// 通过以上的讲解，对闭包应该有了更清晰的认识。如果面试中再被问到闭包，你可以这么回答：
 	// 对闭包来说，函数在该语言中得是一等公民。一般来说，一个函数返回另外一个函数，这个被返回的函数可以引用外层函数的局部变量，
@@ -58,7 +61,7 @@ func main() {
 	// fmt.Println(c2()) // 2
 	// fmt.Println(c2()) // 3
 
-	// fmt.Println(c1()) // 3
+	//  fmt.Println(c1()) // 3
 
 	/*
 		var conditions []string
@@ -79,8 +82,7 @@ func main() {
 		fmt.Println(a)
 		fmt.Println(b)*/
 
-	// addQuery := []string{}
-
+   	// addQuery := []string{}
 	// addQuery = append(addQuery, fmt.Sprintf(`"account_status" = %v`, "1"))
 	// addQuery = append(addQuery, fmt.Sprintf(`"account_status_lock_time" = %v`, "2"))
 	// fmt.Println(addQuery[0])

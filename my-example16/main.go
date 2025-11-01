@@ -31,7 +31,20 @@ result2 := buffer.String()
 fmt.Println(result2)
 
 
-//切片 + string() 一次分配
+/*
+[]byte + append 優勢：
+記憶體分配：只有1次分配（預分配時）
+資料複製：直接操作byte slice，無需轉換
+CPU快取：連續記憶體操作，快取友好
+執行時間：約 80-150μs
+[]string + strings.Join 劣勢：
+記憶體分配：至少2次分配（slice + 最終字串）
+資料複製：需要遍歷string slice並複製內容
+額外開銷：維護string header的開銷
+執行時間：約 200-400μs
+*/
+
+//bytes切片 + string() 1次分配
 bytes := make([]byte, 0, 20) // 预分配容量
 fmt.Println(reflect.TypeOf(bytes))
 bytes = append(bytes, "Hello"...)
@@ -40,15 +53,18 @@ bytes = append(bytes, "World"...)
 result3 := string(bytes)
 fmt.Println(result3)
 
-//fmt.Sprintf 有反射开销，性能一般
-result4 := fmt.Sprintf("%s %s", "Hello", "World")
-fmt.Println(result4)
+//strings.Join 2次分配
+result6 := strings.Join([]string{"Hello", "...", "World"}, "")
+fmt.Println(result6)
+
+
 
 //+ 操作符（少量拼接） 大量拼接时性能差
 result5 := "Hello" + " " + "World"
 fmt.Print(result5)
 
-//strings.Join
-result6 := strings.Join([]string{"Hello", " ", "World"}, "")
-fmt.Println(result6)
+//fmt.Sprintf 有反射开销，性能一般
+result4 := fmt.Sprintf("%s %s", "Hello", "World")
+fmt.Println(result4)
+
 }

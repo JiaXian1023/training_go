@@ -172,10 +172,15 @@ func main() {
         fmt.Print("run ")
 		ticker := time.NewTicker(2 * time.Second)
     	defer ticker.Stop()
-
-    	for range ticker.C {
-        	fmt.Print("run test ")
+		for {
+			select {
+			case t := <-ticker.C:
+				fmt.Print("run test ")
+			}
 		}
+    	for range ticker.C {
+         	fmt.Print("run test ")
+}
 
     }()
 	sigchan := make(chan os.Signal, 1)
