@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
-	"github.com/gin-gonic/gin"
-	"github.com/patrickmn/go-cache"
-	_ "github.com/go-sql-driver/mysql"
+	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"sync"
 	"time"
-	"fmt"
+
+	"github.com/gin-gonic/gin"
+	_ "github.com/go-sql-driver/mysql"
+	"github.com/patrickmn/go-cache"
 )
 
 var (
@@ -24,21 +27,21 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
-	
+
 	db.SetMaxOpenConns(100)
 	db.SetMaxIdleConns(20)
 	db.SetConnMaxLifetime(5 * time.Minute)
-	
+
 	// 初始化緩存
 	c = cache.New(5*time.Minute, 10*time.Minute)
 }
 
 type rateLimiter struct {
 	mu         sync.Mutex
-	rate       int           // 每秒允許的請求數
-	capacity   int           // 桶容量
-	tokens     int           // 當前令牌數
-	lastRefill time.Time     // 上次補充時間
+	rate       int       // 每秒允許的請求數
+	capacity   int       // 桶容量
+	tokens     int       // 當前令牌數
+	lastRefill time.Time // 上次補充時間
 }
 
 func newRateLimiter(rate, capacity int) *rateLimiter {
@@ -53,22 +56,22 @@ func newRateLimiter(rate, capacity int) *rateLimiter {
 func (rl *rateLimiter) Allow() bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
-	
+
 	now := time.Now()
 	elapsed := now.Sub(rl.lastRefill)
-	
+
 	// 計算應該補充的令牌數
 	tokensToAdd := int(elapsed.Seconds() * float64(rl.rate))
 	if tokensToAdd > 0 {
 		rl.tokens = min(rl.tokens+tokensToAdd, rl.capacity)
 		rl.lastRefill = now
 	}
-	
+
 	if rl.tokens > 0 {
 		rl.tokens--
 		return true
 	}
-	
+
 	return false
 }
 
@@ -81,7 +84,7 @@ func min(a, b int) int {
 
 func rateLimiterMiddleware() gin.HandlerFunc {
 	limiter := newRateLimiter(1000, 1000) // 每秒1000請求
-	
+
 	return func(c *gin.Context) {
 		if !limiter.Allow() {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
@@ -102,18 +105,18 @@ func cacheControlMiddleware() gin.HandlerFunc {
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
-	
+
 	r := gin.New()
-	
+
 	// 中間件
 	r.Use(gin.Recovery())
 	r.Use(rateLimiterMiddleware())
 	r.Use(cacheControlMiddleware())
-	
+
 	// 路由
 	r.GET("/api/query", queryHandler)
 	r.GET("/api/async-query", asyncQueryHandler)
-	
+
 	// 優化HTTP服務器配置
 	s := &http.Server{
 		Addr:           ":8080",
@@ -123,7 +126,7 @@ func main() {
 		IdleTimeout:    60 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
-	fmt.Println("RUN",s.Addr)
+	fmt.Println("RUN", s.Addr)
 	// 啟動服務器
 	if err := s.ListenAndServe(); err != nil {
 		panic(err)
@@ -132,46 +135,46 @@ func main() {
 
 func queryHandler(c *gin.Context) {
 	param := c.Query("param")
-	
+
 	// 檢查緩存
 	if data, found := c.Get(param); found {
 		c.JSON(http.StatusOK, data)
 		return
 	}
-	
+
 	// 查詢數據庫
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	
+
 	result, err := queryDatabase(ctx, param)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	
+
 	// 設置緩存 - 使用全局緩存對象而不是gin.Context
 	c.Set(param, result)
-	
+
 	c.JSON(http.StatusOK, result)
 }
 
-//異步處理
+// 異步處理
 func asyncQueryHandler(c *gin.Context) {
 	param := c.Query("param")
-	
+
 	// 檢查緩存
 	if data, found := c.Get(param); found {
 		c.JSON(http.StatusOK, data)
 		return
 	}
-	
+
 	resultChan := make(chan interface{}, 1)
 	errChan := make(chan error, 1)
-	
+
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		
+
 		result, err := queryDatabase(ctx, param)
 		if err != nil {
 			errChan <- err
@@ -179,7 +182,7 @@ func asyncQueryHandler(c *gin.Context) {
 		}
 		resultChan <- result
 	}()
-	
+
 	select {
 	case result := <-resultChan:
 		c.Set(param, result)
@@ -191,6 +194,68 @@ func asyncQueryHandler(c *gin.Context) {
 	}
 }
 
+func asyncQueryHandler2(c *gin.Context) {
+	param := c.Query("param")
+	if param == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "param is required"})
+		return
+	}
+
+	// 檢查緩存（建議使用 Redis 或內存緩存替代 Gin 上下文）
+	// if data, found := getFromCache(param); found {
+	// 	c.JSON(http.StatusOK, data)
+	// 	return
+	// }
+
+	// 使用請求上下文，確保請求取消時能正確傳遞
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	resultChan := make(chan interface{}, 1)
+	errChan := make(chan error, 1)
+
+	go func(ctx context.Context) {
+		// 使用傳入的上下文，確保超時和取消能正確傳遞
+		result, err := queryDatabase(ctx, param)
+		if err != nil {
+			select {
+			case errChan <- err:
+				// 成功發送錯誤
+			case <-ctx.Done():
+				// 上下文已取消，忽略發送
+			}
+			return
+		}
+
+		select {
+		case resultChan <- result:
+			// 成功發送結果
+		case <-ctx.Done():
+			// 上下文已取消，忽略發送
+		}
+	}(ctx)
+
+	select {
+	case result := <-resultChan:
+		// 查詢成功，設置緩存
+		//setToCache(param, result)
+		c.JSON(http.StatusOK, result)
+
+	case err := <-errChan:
+		// 查詢出錯
+		log.Printf("Database query error: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+
+	case <-ctx.Done():
+		// 統一的超時和取消處理
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			c.JSON(http.StatusGatewayTimeout, gin.H{"error": "request timeout"})
+		} else {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "service unavailable"})
+		}
+	}
+}
+
 func queryDatabase(ctx context.Context, param string) (interface{}, error) {
 	// 實際數據庫查詢邏輯
 	var result string
@@ -198,7 +263,7 @@ func queryDatabase(ctx context.Context, param string) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return gin.H{
 		"param": param,
 		"data":  result,
